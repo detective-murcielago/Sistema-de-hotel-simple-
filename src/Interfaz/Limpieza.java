@@ -15,6 +15,33 @@ public class Limpieza extends javax.swing.JFrame {
         cargarTablaLimpieza();
         jTextFDescripcionProblema.setEditable(false);
         this.setResizable(false);
+        agregarBotonConsumo();
+    }
+
+    /**
+     * Agrega (por código, fuera del GEN-code) una barra de menú con la opción
+     * para registrar los insumos de LIMPIEZA usados en una habitación. Una barra
+     * de menú se coloca sobre el contenido sin interferir con el GroupLayout del
+     * formulario. Cada registro descuenta stock real del inventario.
+     */
+    private void agregarBotonConsumo() {
+        javax.swing.JMenuBar barraMenu = new javax.swing.JMenuBar();
+        javax.swing.JMenu menu = new javax.swing.JMenu("Inventario");
+        javax.swing.JMenuItem item = new javax.swing.JMenuItem("Registrar insumos usados...");
+        item.setToolTipText("Descontar del inventario los productos de limpieza usados en la habitación");
+        item.addActionListener(e -> {
+            String ref = jTextFNroHabitacion.getText().trim();
+            DialogoConsumoInsumos d = new DialogoConsumoInsumos(
+                    this, "LIMPIEZA", "Limpieza", "Nro Habitación", "Personal de Limpieza");
+            d.setTipoFiltro("Limpieza");
+            if (!ref.isEmpty()) {
+                d.prellenarReferencia(ref);
+            }
+            d.setVisible(true);
+        });
+        menu.add(item);
+        barraMenu.add(menu);
+        setJMenuBar(barraMenu);
     }
 
     /**

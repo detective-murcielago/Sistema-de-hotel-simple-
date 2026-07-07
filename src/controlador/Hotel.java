@@ -50,6 +50,10 @@ public class Hotel implements Serializable {
         return inventario;
     }
 
+    public void setInventario(java.util.List<Entidades.Producto> inventario) {
+        this.inventario = (inventario != null) ? inventario : new java.util.ArrayList<>();
+    }
+
     public java.util.List<Entidades.OrdenCompra> getListaOrdenes() {
         if (listaOrdenes == null) {
             listaOrdenes = new java.util.ArrayList<>();

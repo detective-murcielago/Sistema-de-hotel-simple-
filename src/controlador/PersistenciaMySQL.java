@@ -48,6 +48,7 @@ public class PersistenciaMySQL implements PersistenciaHotel {
         hotel.setListaFHospedaje(cargarFichas(hotel));
         hotel.setListaPreferencias(cargarPreferencias());   // F-004 / F-011
         hotel.setListaPagosServicio(cargarPagosServicio()); // F-010
+        hotel.setInventario(cargarProductos());             // Inventario / Almacén
         System.out.println("Datos cargados desde MySQL correctamente.");
         return hotel;
     }
@@ -308,6 +309,43 @@ public class PersistenciaMySQL implements PersistenciaHotel {
                 ps.setDate(5, new java.sql.Date(p.getFechaAgregado().getTime()));
                 ps.executeUpdate();
             }
+        } catch (SQLException ex) { ex.printStackTrace(); }
+    }
+
+    // Reconstruye el inventario en memoria desde la tabla producto.
+    private List<Producto> cargarProductos() {
+        List<Producto> lista = new ArrayList<>();
+        String sql = "SELECT nombre, tipo, stock, stock_minimo, fecha_agregado FROM producto WHERE id_hotel = 1";
+        try (Statement st = con.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                java.util.Date fecha = rs.getDate("fecha_agregado");
+                Producto p = new Producto(
+                        rs.getString("nombre"),
+                        rs.getString("tipo"),
+                        rs.getInt("stock"),
+                        fecha != null ? fecha : new java.util.Date(),
+                        rs.getInt("stock_minimo"));
+                lista.add(p);
+            }
+        } catch (SQLException ex) { ex.printStackTrace(); }
+        return lista;
+    }
+
+    // Registra un consumo de insumo (kardex) para trazabilidad de las salidas.
+    // area: "LIMPIEZA" o "COCINA"; referencia: nro de habitación o id de pedido.
+    public void registrarConsumo(String producto, int cantidad, String area,
+                                 String referencia, String responsable) {
+        String sql = "INSERT INTO consumo_insumo " +
+                "(producto, cantidad, area, referencia, responsable, fecha) " +
+                "VALUES (?,?,?,?,?,?)";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, producto);
+            ps.setInt(2, cantidad);
+            ps.setString(3, area);
+            ps.setString(4, referencia);
+            ps.setString(5, responsable);
+            ps.setTimestamp(6, java.sql.Timestamp.valueOf(LocalDateTime.now()));
+            ps.executeUpdate();
         } catch (SQLException ex) { ex.printStackTrace(); }
     }
 

@@ -34,5 +34,13 @@ public class PersistenciaArchivos implements PersistenciaHotel {
         }
         return null;
     }
-    
+
+    @Override
+    public void registrarConsumo(String producto, int cantidad, String area,
+                                 String referencia, String responsable) {
+        // Modo archivos (.dat): el kardex de consumos no se persiste aquí.
+        // La baja de stock ya queda dentro del objeto Hotel serializado.
+        System.out.println("Consumo registrado (modo archivos): " + producto + " x" + cantidad);
+    }
+
 }

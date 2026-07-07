@@ -11,6 +11,32 @@ public class Chef extends javax.swing.JFrame {
         cargarTablaPedidos();
         setLocationRelativeTo(null);
         this.setResizable(false);
+        agregarBotonConsumo();
+    }
+
+    /**
+     * Agrega (por código, fuera del GEN-code) una barra de menú con la opción
+     * para registrar los insumos de COCINA usados al preparar un pedido. Cada
+     * registro descuenta stock real del inventario (productos tipo "Alimentos").
+     */
+    private void agregarBotonConsumo() {
+        javax.swing.JMenuBar barraMenu = new javax.swing.JMenuBar();
+        javax.swing.JMenu menu = new javax.swing.JMenu("Inventario");
+        javax.swing.JMenuItem item = new javax.swing.JMenuItem("Registrar insumos usados...");
+        item.setToolTipText("Descontar del inventario los alimentos usados para preparar el pedido");
+        item.addActionListener(e -> {
+            String ref = jTextFNroHabi.getText().trim();
+            DialogoConsumoInsumos d = new DialogoConsumoInsumos(
+                    this, "COCINA", "Alimentos", "Nro Habitación / Pedido", "Chef");
+            d.setTipoFiltro("Alimentos");
+            if (!ref.isEmpty()) {
+                d.prellenarReferencia(ref);
+            }
+            d.setVisible(true);
+        });
+        menu.add(item);
+        barraMenu.add(menu);
+        setJMenuBar(barraMenu);
     }
 
     @SuppressWarnings("unchecked")
