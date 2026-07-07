@@ -147,7 +147,7 @@ public class Empleados extends javax.swing.JFrame {
             }
         });
 
-        jComboBoxRolEmp.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Seleccione", "Recepcionista", "Jefe de Compras", "Jefe de Almacen", "Chef", "Limpieza", "Gerente General" }));
+        jComboBoxRolEmp.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Seleccione", "Recepcionista", "Jefe de compras", "Jefe de almacen", "Chef", "Limpieza", "Gerente General", "Jefe de RRHH" }));
         jComboBoxRolEmp.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jComboBoxRolEmpActionPerformed(evt);
@@ -581,7 +581,7 @@ public class Empleados extends javax.swing.JFrame {
             case "Recepcionista":
                 jTextFSueldoEmp.setText("1200.0");
                 break;
-            case "Gerente de almacen":
+            case "Jefe de almacen":
                 jTextFSueldoEmp.setText("2500.0");
                 break;
             case "Chef":
@@ -590,11 +590,11 @@ public class Empleados extends javax.swing.JFrame {
             case "Limpieza":
                 jTextFSueldoEmp.setText("1100.0");
                 break;
-            case "Gerente de compras":
-                jTextFSueldoEmp.setText("2800.0");
-                break;
-            case "Gerente de RRHH":
+            case "Jefe de compras":
                 jTextFSueldoEmp.setText("2600.0");
+                break;
+            case "Jefe de RRHH":
+                jTextFSueldoEmp.setText("2300.0");
                 break;
             case "Gerente General":
                 jTextFSueldoEmp.setText("3000.0");
