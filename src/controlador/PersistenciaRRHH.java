@@ -8,16 +8,6 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Acceso a datos en MySQL para el Módulo de Recursos Humanos:
- *  - F-017 Control de asistencia (marcaje, tolerancia, bitácora de auditoría)
- *  - F-018 Historial laboral (historial de cargos)
- *  - F-019 Solicitudes de vacaciones y permisos
- *  - F-020 Evaluaciones de desempeño
- *
- * Requiere las tablas creadas por el script sql/rrhh_schema.sql
- * Coloca este archivo en src/controlador/
- */
 public class PersistenciaRRHH {
 
     private final Connection con;

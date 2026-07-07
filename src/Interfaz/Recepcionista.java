@@ -16,7 +16,6 @@ public class Recepcionista extends javax.swing.JFrame {
     private Hotel hotel = SistemaHotel.getInstancia().getHotel();
     private Entidades.FichaHospedaje fichaActual = null;
 
-
     // Campo de motivo de diferencia en el arqueo de caja (corrección 5).
     // Se crea por código y se inserta en el panel de arqueo en iniciarArqueoCaja().
     private javax.swing.JTextField jTextFMotivoDiferencia = new javax.swing.JTextField();
@@ -34,19 +33,25 @@ public class Recepcionista extends javax.swing.JFrame {
         dibujarCuadriculaHabitaciones("Todas las opciones");
         setLocationRelativeTo(null);
         this.setResizable(false);
+
+        java.util.Date hoy = new java.util.Date();
+        jDateChooserFechaIngreso.setMinSelectableDate(hoy); // no antes de hoy
+        jDateChooserFechaIngreso.setMaxSelectableDate(hoy); // no después de hoy
+        jDateChooserFechaIngreso.setDate(hoy);              // preselecciona hoy
     }
+
     private void initPanelesHU() {
         // 1) Construir los paneles (cards)
-        panelPreferencias  = PanelesHU.registrarPreferenciasPanel(); // F-004
-        panelHistEstadias  = PanelesHU.historialEstadiasPanel();     // F-005
+        panelPreferencias = PanelesHU.registrarPreferenciasPanel(); // F-004
+        panelHistEstadias = PanelesHU.historialEstadiasPanel();     // F-005
         panelPagoServicios = PanelesHU.pagoServiciosPanel();         // F-010
-        panelHistCompleto  = PanelesHU.historialCompletoPanel();     // F-011
+        panelHistCompleto = PanelesHU.historialCompletoPanel();     // F-011
 
         // 2) Registrarlos en el contenedor CardLayout
-        jPanelContenedor.add(panelPreferencias,  "cardF004");
-        jPanelContenedor.add(panelHistEstadias,  "cardF005");
+        jPanelContenedor.add(panelPreferencias, "cardF004");
+        jPanelContenedor.add(panelHistEstadias, "cardF005");
         jPanelContenedor.add(panelPagoServicios, "cardF010");
-        jPanelContenedor.add(panelHistCompleto,  "cardF011");
+        jPanelContenedor.add(panelHistCompleto, "cardF011");
 
         // 3) Crear los botones del menú con la estética existente
         java.awt.Color azul = new java.awt.Color(102, 153, 255);
@@ -69,7 +74,9 @@ public class Recepcionista extends javax.swing.JFrame {
         java.awt.Container padre = jPanelMenu.getParent();
         // Capturamos el ancho preferido original del menú para conservarlo.
         int anchoMenu = jPanelMenu.getPreferredSize().width;
-        if (anchoMenu <= 0) anchoMenu = 200;
+        if (anchoMenu <= 0) {
+            anchoMenu = 200;
+        }
 
         // Sub-panel con los botones nuevos (misma estética gris del menú)
         javax.swing.JPanel subMenu = new javax.swing.JPanel();
@@ -111,7 +118,9 @@ public class Recepcionista extends javax.swing.JFrame {
         padre.repaint();
     }
 
-    /** Crea un botón con la estética azul del menú del recepcionista. */
+    /**
+     * Crea un botón con la estética azul del menú del recepcionista.
+     */
     private javax.swing.JButton crearBotonMenu(String texto) {
         javax.swing.JButton b = new javax.swing.JButton(texto);
         b.setBackground(new java.awt.Color(102, 153, 255));
@@ -121,7 +130,9 @@ public class Recepcionista extends javax.swing.JFrame {
         return b;
     }
 
-    /** Muestra un panel dentro del jPanelContenedor (mismo patrón del proyecto). */
+    /**
+     * Muestra un panel dentro del jPanelContenedor (mismo patrón del proyecto).
+     */
     private void mostrarCard(javax.swing.JPanel panel) {
         jPanelContenedor.removeAll();
         jPanelContenedor.add(panel);
@@ -1661,7 +1672,6 @@ public class Recepcionista extends javax.swing.JFrame {
         mostrarCard(panelPagoServicios);
     }//GEN-LAST:event_jButton1ActionPerformed
 
-
     /**
      * @param args the command line arguments
      */
@@ -1965,8 +1975,8 @@ public class Recepcionista extends javax.swing.JFrame {
     /**
      * Inserta -una sola vez- el label y el JTextField de "Motivo de diferencia"
      * en el panel de arqueo, en una zona libre debajo del panel "Estado del
-     * Turno" (sin modificar el layout de jPanel4, para no solaparlos).
-     * Texto libre para explicar por qué falta o sobra dinero al cerrar caja.
+     * Turno" (sin modificar el layout de jPanel4, para no solaparlos). Texto
+     * libre para explicar por qué falta o sobra dinero al cerrar caja.
      */
     private void integrarCampoMotivo() {
         if (jTextFMotivoDiferencia.getParent() != null) {
