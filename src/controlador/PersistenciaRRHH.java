@@ -285,4 +285,106 @@ public class PersistenciaRRHH {
         } catch (SQLException ex) { ex.printStackTrace(); }
         return lista;
     }
+
+    // =========================================================
+    // F-021 · HORARIO SEMANAL Y DOTACIÓN (PLANTILLA)
+    //   Requiere el script sql/rrhh_horarios_plantilla.sql
+    // =========================================================
+
+    /** Guarda (inserta o actualiza) el horario de un empleado en un día (1=Lun..7=Dom). */
+    public void guardarHorarioSemanal(int idEmpleado, int diaSemana,
+                                      LocalTime entrada, LocalTime salida, boolean descanso) {
+        String sql = "INSERT INTO horario_semanal (id_empleado, dia_semana, hora_entrada, hora_salida, descanso) "
+                   + "VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE "
+                   + "hora_entrada=VALUES(hora_entrada), hora_salida=VALUES(hora_salida), descanso=VALUES(descanso)";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, idEmpleado);
+            ps.setInt(2, diaSemana);
+            if (descanso) {
+                ps.setNull(3, Types.TIME);
+                ps.setNull(4, Types.TIME);
+            } else {
+                ps.setTime(3, Time.valueOf(entrada));
+                ps.setTime(4, Time.valueOf(salida));
+            }
+            ps.setInt(5, descanso ? 1 : 0);
+            ps.executeUpdate();
+        } catch (SQLException ex) { ex.printStackTrace(); }
+    }
+
+    /** Elimina la asignación de un día para un empleado (deja la celda vacía). */
+    public void eliminarHorarioDia(int idEmpleado, int diaSemana) {
+        String sql = "DELETE FROM horario_semanal WHERE id_empleado=? AND dia_semana=?";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, idEmpleado);
+            ps.setInt(2, diaSemana);
+            ps.executeUpdate();
+        } catch (SQLException ex) { ex.printStackTrace(); }
+    }
+
+    /**
+     * Devuelve el horario de todos los empleados como matriz:
+     *   clave = id de empleado, valor = arreglo de 8 posiciones (índices 1..7 = Lun..Dom).
+     * Cada celda es "08:00-17:00", "D" (descanso), o "" (sin asignar).
+     */
+    public java.util.Map<Integer, String[]> obtenerMatrizHorarios() {
+        java.util.Map<Integer, String[]> mapa = new java.util.LinkedHashMap<>();
+        String sql = "SELECT id_empleado, dia_semana, hora_entrada, hora_salida, descanso FROM horario_semanal";
+        try (PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                int idEmp = rs.getInt("id_empleado");
+                int dia = rs.getInt("dia_semana");
+                String[] fila = mapa.computeIfAbsent(idEmp, k -> new String[]{"", "", "", "", "", "", "", ""});
+                if (rs.getInt("descanso") == 1) {
+                    fila[dia] = "D";
+                } else {
+                    Time e = rs.getTime("hora_entrada");
+                    Time s = rs.getTime("hora_salida");
+                    String he = (e == null) ? "" : e.toString().substring(0, 5);
+                    String hs = (s == null) ? "" : s.toString().substring(0, 5);
+                    fila[dia] = he + "-" + hs;
+                }
+            }
+        } catch (SQLException ex) { ex.printStackTrace(); }
+        return mapa;
+    }
+
+    /**
+     * Dotación por rol: cada Object[] = { rol(String), maximo(int), ocupados(int) }.
+     * Lee la vista v_dotacion.
+     */
+    public List<Object[]> listarDotacion() {
+        List<Object[]> lista = new ArrayList<>();
+        String sql = "SELECT rol, maximo, ocupados FROM v_dotacion ORDER BY rol";
+        try (PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                lista.add(new Object[]{ rs.getString("rol"), rs.getInt("maximo"), rs.getInt("ocupados") });
+            }
+        } catch (SQLException ex) { ex.printStackTrace(); }
+        return lista;
+    }
+
+    /**
+     * Indica si queda al menos una vacante libre para el rol dado.
+     * Cuenta directamente sobre la tabla empleado vs el tope de rol_plantilla,
+     * así refleja el estado real aunque los contadores auxiliares se desfasen.
+     * Si el rol no tiene tope definido, devuelve true (sin límite).
+     */
+    public boolean hayCupoParaRol(String rol) {
+        String sql = "SELECT rp.max_empleados - COALESCE(c.n, 0) AS libre "
+                   + "FROM rol_plantilla rp "
+                   + "LEFT JOIN (SELECT rol, COUNT(*) n FROM empleado WHERE rol = ? GROUP BY rol) c "
+                   + "  ON c.rol = rp.rol "
+                   + "WHERE rp.rol = ?";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, rol);
+            ps.setString(2, rol);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt("libre") > 0;
+            }
+        } catch (SQLException ex) { ex.printStackTrace(); }
+        return true; // rol sin tope definido en rol_plantilla
+    }
 }

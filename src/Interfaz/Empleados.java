@@ -147,7 +147,7 @@ public class Empleados extends javax.swing.JFrame {
             }
         });
 
-        jComboBoxRolEmp.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Seleccione", "Recepcionista", "Gerente de compras", "Gerente de almacen", "Chef", "Limpieza", "Gerente de RRHH", "Gerente General" }));
+        jComboBoxRolEmp.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Seleccione", "Recepcionista", "Jefe de Compras", "Jefe de Almacen", "Chef", "Limpieza", "Gerente General" }));
         jComboBoxRolEmp.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jComboBoxRolEmpActionPerformed(evt);
@@ -522,6 +522,16 @@ public class Empleados extends javax.swing.JFrame {
                 return;
             }
 
+            // 6.5 VERIFICAR CUPO EN LA PLANTILLA (tope por rol)
+            controlador.PersistenciaRRHH rrhhVal = new controlador.PersistenciaRRHH();
+            if (!rrhhVal.hayCupoParaRol(rol)) {
+                JOptionPane.showMessageDialog(this,
+                        "No hay vacantes disponibles para el rol \"" + rol + "\".\n"
+                        + "La plantilla para ese puesto ya está completa.",
+                        "Plantilla completa", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
             // 7. CREAR Y GUARDAR EMPLEADO
             Empleado nuevoEmpleado = new Empleado(id, rol, sueldo, correo, fechaInicio, fechaFin, nombre, apellido, tipoDoc, numDocStr, telefono, direccion);
 
@@ -732,16 +742,27 @@ public class Empleados extends javax.swing.JFrame {
                 return;
             }
 
-            // 5. CONVERSIONES NUMÉRICAS
+            // 5.5 CONVERTIR ID Y VALIDAR VACANTE SI CAMBIA DE ROL
             int id = Integer.parseInt(idStr);
             int telefono = Integer.parseInt(telStr);
             double sueldo = Double.parseDouble(sueldoStr);
+            Hotel hotel = SistemaHotel.getInstancia().getHotel();
+            Empleado empOriginal = hotel.buscarEmpleadoPorId(id);
+            if (empOriginal != null && !empOriginal.getRol().equalsIgnoreCase(rol)) {
+                controlador.PersistenciaRRHH rrhhVal = new controlador.PersistenciaRRHH();
+                if (!rrhhVal.hayCupoParaRol(rol)) {
+                    JOptionPane.showMessageDialog(this,
+                            "No se puede cambiar a \"" + rol + "\": no hay vacante disponible.\n"
+                            + "Debe existir un cupo libre en ese puesto para ascender o reasignar al empleado.",
+                            "Sin vacante", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+            }
 
             // 6. CREAR EL OBJETO EMPLEADO CON LOS NUEVOS DATOS
             Empleado empleadoActualizado = new Empleado(id, rol, sueldo, correo, fechaInicio, fechaFin, nombre, apellido, tipoDoc, numDocStr, telefono, direccion);
 
             // 7. ENVIAR A ACTUALIZAR EN EL SISTEMA
-            Hotel hotel = SistemaHotel.getInstancia().getHotel();
             boolean actualizado = hotel.actualizarEmpleado(empleadoActualizado);
 
             if (actualizado) {

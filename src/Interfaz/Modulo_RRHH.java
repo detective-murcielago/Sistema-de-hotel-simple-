@@ -15,6 +15,10 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.border.TitledBorder;
+import javax.swing.border.LineBorder;
 
 /**
  * Módulo unificado de Recursos Humanos.
@@ -88,6 +92,7 @@ public class Modulo_RRHH extends javax.swing.JFrame {
         tabs.addTab("Historial Laboral (F-018)", construirPanelHistorialLaboral());
         tabs.addTab("Permisos / Vacaciones (F-019)", construirPanelPermisos());
         tabs.addTab("Evaluación de Desempeño (F-020)", construirPanelEvaluaciones());
+        tabs.addTab("Crear Horarios (F-021)", construirPanelCrearHorarios());
 
         getContentPane().add(tabs, BorderLayout.CENTER);
     }
@@ -168,50 +173,23 @@ public class Modulo_RRHH extends javax.swing.JFrame {
             procesarMarcaje(emp, tipo);
         });
 
-        // -- Sub-panel: configurar tolerancia --
-        JPanel panelTolerancia = panelConTitulo("Configuración de tolerancia");
-        JSpinner spinnerTolerancia = new JSpinner(new SpinnerNumberModel(rrhh.obtenerMinutosTolerancia(), 0, 120, 1));
-        GridBagConstraints gbc2 = gbcBase();
-        agregarFila(panelTolerancia, gbc2, 0, "Minutos de tolerancia:", spinnerTolerancia);
-        JButton btnGuardarTolerancia = new JButton("Guardar tolerancia");
-        gbc2.gridx = 0; gbc2.gridy = 1; gbc2.gridwidth = 2; gbc2.insets = new Insets(10, 6, 4, 6);
-        panelTolerancia.add(btnGuardarTolerancia, gbc2);
-        btnGuardarTolerancia.addActionListener(e -> {
-            rrhh.actualizarMinutosTolerancia((Integer) spinnerTolerancia.getValue());
-            JOptionPane.showMessageDialog(this, "Tolerancia actualizada correctamente.", "Listo", JOptionPane.INFORMATION_MESSAGE);
-        });
-
-        // -- Sub-panel: asignar turno --
-        JPanel panelTurno = panelConTitulo("Asignar turno (horario habilitado)");
-        JComboBox<Empleado> comboEmpleadoTurno = new JComboBox<>(listaEmpleadosComoArray());
-        aplicarRendererEmpleado(comboEmpleadoTurno);
-        JTextField txtHoraEntrada = new JTextField("08:00");
-        JTextField txtHoraSalida = new JTextField("17:00");
-        GridBagConstraints gbc3 = gbcBase();
-        agregarFila(panelTurno, gbc3, 0, "Empleado:", comboEmpleadoTurno);
-        agregarFila(panelTurno, gbc3, 1, "Hora entrada (HH:mm):", txtHoraEntrada);
-        agregarFila(panelTurno, gbc3, 2, "Hora salida (HH:mm):", txtHoraSalida);
-        JButton btnAsignarTurno = new JButton("Asignar turno");
-        gbc3.gridx = 0; gbc3.gridy = 3; gbc3.gridwidth = 2; gbc3.insets = new Insets(10, 6, 4, 6);
-        panelTurno.add(btnAsignarTurno, gbc3);
-        btnAsignarTurno.addActionListener(e -> {
-            Empleado emp = (Empleado) comboEmpleadoTurno.getSelectedItem();
-            if (emp == null) return;
-            try {
-                LocalTime he = LocalTime.parse(txtHoraEntrada.getText().trim(), FMT_HORA);
-                LocalTime hs = LocalTime.parse(txtHoraSalida.getText().trim(), FMT_HORA);
-                rrhh.asignarTurno(emp.getId(), he, hs);
-                JOptionPane.showMessageDialog(this, "Turno asignado a " + emp.getNombre() + ".", "Listo", JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Formato de hora inválido. Use HH:mm (ej. 08:00).", "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        });
+        // -- Sub-panel: PLANTILLA / DOTACIÓN (reemplaza "Asignar turno") --
+        JPanel contenidoDotacion = new JPanel();
+        contenidoDotacion.setBackground(Color.WHITE);
+        construirContenidoDotacion(contenidoDotacion);
+        JScrollPane scrollDotacion = new JScrollPane(contenidoDotacion,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollDotacion.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(GRIS_BORDE),
+                BorderFactory.createTitledBorder("Plantilla / Dotación de personal")));
+        scrollDotacion.getVerticalScrollBar().setUnitIncrement(16);
+        scrollDotacion.setPreferredSize(new Dimension(330, 260));
+        scrollDotacion.setMaximumSize(new Dimension(Integer.MAX_VALUE, 260));
 
         izquierda.add(panelMarcaje);
         izquierda.add(Box.createVerticalStrut(10));
-        izquierda.add(panelTolerancia);
-        izquierda.add(Box.createVerticalStrut(10));
-        izquierda.add(panelTurno);
+        izquierda.add(scrollDotacion);
         izquierda.add(Box.createVerticalGlue());
 
         // --- Panel derecho: reporte de marcajes + bitácora ---
@@ -650,6 +628,284 @@ public class Modulo_RRHH extends javax.swing.JFrame {
                     ev.getFechaEvaluacion().format(FMT_FECHA), ev.getCalificacion(),
                     ev.getEvaluador(), ev.getObservaciones()
             });
+        }
+    }
+
+    // =========================================================
+    // F-021 · DOTACIÓN (tarjetas ocupados/máximo por rol)
+    // =========================================================
+    private void construirContenidoDotacion(JPanel contenedor) {
+        contenedor.setLayout(new BoxLayout(contenedor, BoxLayout.Y_AXIS));
+        try {
+            List<Object[]> datos = rrhh.listarDotacion();
+            if (datos.isEmpty()) {
+                JLabel aviso = new JLabel("Ejecuta el script SQL de horarios para ver la dotación.");
+                aviso.setForeground(Color.BLACK);
+                contenedor.add(aviso);
+            }
+            for (Object[] d : datos) {
+                String rol = (String) d[0];
+                int maximo = (Integer) d[1];
+                int ocupados = (Integer) d[2];
+                JPanel tarjeta = crearTarjetaDotacion(rol, maximo, ocupados);
+                tarjeta.setAlignmentX(Component.LEFT_ALIGNMENT);
+                tarjeta.setMaximumSize(new Dimension(Integer.MAX_VALUE, 74));
+                contenedor.add(tarjeta);
+                contenedor.add(Box.createVerticalStrut(6));
+            }
+        } catch (Exception ex) {
+            JLabel err = new JLabel("No se pudo cargar la dotación.");
+            err.setForeground(Color.BLACK);
+            contenedor.add(err);
+        }
+    }
+
+    private JPanel crearTarjetaDotacion(String rol, int maximo, int ocupados) {
+        boolean lleno = ocupados >= maximo;
+        JPanel card = new JPanel(new BorderLayout(6, 2));
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(GRIS_BORDE, 1, true), new EmptyBorder(6, 10, 6, 10)));
+        card.setBackground(lleno ? new Color(0xFD, 0xEC, 0xEA) : new Color(0xE8, 0xF5, 0xE9));
+
+        JLabel lblRol = new JLabel(rol);
+        lblRol.setFont(new Font("Segoe UI", Font.BOLD, 13));
+
+        JLabel lblConteo = new JLabel(ocupados + " / " + maximo);
+        lblConteo.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        lblConteo.setForeground(lleno ? ROJO_TEXTO : VERDE_TEXTO);
+
+        JPanel top = new JPanel(new BorderLayout());
+        top.setOpaque(false);
+        top.add(lblRol, BorderLayout.WEST);
+        top.add(lblConteo, BorderLayout.EAST);
+
+        JProgressBar barra = new JProgressBar(0, Math.max(1, maximo));
+        barra.setValue(ocupados);
+        barra.setForeground(lleno ? ROJO_TEXTO : VERDE_TEXTO);
+
+        JLabel estado = new JLabel(lleno ? "Cupo completo" : (maximo - ocupados) + " cupo(s) disponible(s)");
+        estado.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        estado.setForeground(lleno ? ROJO_TEXTO : new Color(0x55, 0x55, 0x55));
+
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.setOpaque(false);
+        bottom.add(barra, BorderLayout.CENTER);
+        bottom.add(estado, BorderLayout.SOUTH);
+
+        card.add(top, BorderLayout.NORTH);
+        card.add(bottom, BorderLayout.CENTER);
+        return card;
+    }
+
+    // =========================================================
+    // F-021 · CREAR HORARIOS (lista + asignación + tabla general)
+    // =========================================================
+    private static final String[] DIAS_SEMANA =
+            {"Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"};
+
+    private DefaultTableModel modeloHorarioGeneral;
+    private JList<Empleado> listaEmpHorario;
+    private JComboBox<String> comboDiaHorario;
+    private JTextField txtEntradaHorario;
+    private JTextField txtSalidaHorario;
+    private JCheckBox chkDescansoHorario;
+
+    private JPanel construirPanelCrearHorarios() {
+        JPanel raiz = new JPanel(new BorderLayout(10, 10));
+        raiz.setBorder(new EmptyBorder(12, 12, 12, 12));
+        raiz.setBackground(GRIS_FONDO);
+
+        // ---------- LATERAL IZQUIERDO ----------
+        JPanel izquierda = new JPanel(new BorderLayout(0, 10));
+        izquierda.setOpaque(false);
+        izquierda.setPreferredSize(new Dimension(330, 0));
+
+        // Lista de empleados
+        listaEmpHorario = new JList<>(listaEmpleadosComoArray());
+        listaEmpHorario.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        listaEmpHorario.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof Empleado) {
+                    Empleado emp = (Empleado) value;
+                    setText(emp.getNombre() + " " + emp.getApellido() + "  ·  " + emp.getRol());
+                }
+                return this;
+            }
+        });
+        JScrollPane spLista = new JScrollPane(listaEmpHorario);
+        spLista.setBorder(new TitledBorder("Empleados"));
+        spLista.setPreferredSize(new Dimension(320, 240));
+
+        // Formulario de asignación
+        JPanel form = panelConTitulo("Asignar horario");
+        comboDiaHorario = new JComboBox<>(DIAS_SEMANA);
+        txtEntradaHorario = new JTextField("08:00");
+        txtSalidaHorario = new JTextField("17:00");
+        chkDescansoHorario = new JCheckBox("Marcar como descanso (D)");
+        chkDescansoHorario.setOpaque(false);
+        chkDescansoHorario.addActionListener(e -> {
+            boolean d = chkDescansoHorario.isSelected();
+            txtEntradaHorario.setEnabled(!d);
+            txtSalidaHorario.setEnabled(!d);
+        });
+
+        GridBagConstraints g = gbcBase();
+        agregarFila(form, g, 0, "Día:", comboDiaHorario);
+        agregarFila(form, g, 1, "Hora entrada (HH:mm):", txtEntradaHorario);
+        agregarFila(form, g, 2, "Hora salida (HH:mm):", txtSalidaHorario);
+        g.gridx = 0; g.gridy = 3; g.gridwidth = 2; g.insets = new Insets(6, 6, 4, 6);
+        form.add(chkDescansoHorario, g);
+
+        JButton btnGuardar = new JButton("Guardar horario del día");
+        btnGuardar.setBackground(VERDE_HEADER);
+        btnGuardar.setForeground(Color.WHITE);
+        g.gridy = 4;
+        form.add(btnGuardar, g);
+        JButton btnQuitar = new JButton("Quitar día");
+        g.gridy = 5;
+        form.add(btnQuitar, g);
+
+        btnGuardar.addActionListener(e -> guardarHorarioDia());
+        btnQuitar.addActionListener(e -> quitarHorarioDia());
+
+        izquierda.add(spLista, BorderLayout.NORTH);
+
+        // Contenedor central: formulario de asignación + tolerancia
+        JPanel centro = new JPanel();
+        centro.setOpaque(false);
+        centro.setLayout(new BoxLayout(centro, BoxLayout.Y_AXIS));
+        form.setAlignmentX(Component.LEFT_ALIGNMENT);
+        centro.add(form);
+        centro.add(Box.createVerticalStrut(10));
+
+        // -- Sub-panel: configuración de tolerancia (movido aquí) --
+        JPanel panelTolerancia = panelConTitulo("Configuración de tolerancia");
+        panelTolerancia.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JSpinner spinnerTolerancia = new JSpinner(new SpinnerNumberModel(rrhh.obtenerMinutosTolerancia(), 0, 120, 1));
+        GridBagConstraints gbcT = gbcBase();
+        agregarFila(panelTolerancia, gbcT, 0, "Minutos de tolerancia:", spinnerTolerancia);
+        JButton btnGuardarTolerancia = new JButton("Guardar tolerancia");
+        gbcT.gridx = 0; gbcT.gridy = 1; gbcT.gridwidth = 2; gbcT.insets = new Insets(10, 6, 4, 6);
+        panelTolerancia.add(btnGuardarTolerancia, gbcT);
+        btnGuardarTolerancia.addActionListener(e -> {
+            rrhh.actualizarMinutosTolerancia((Integer) spinnerTolerancia.getValue());
+            JOptionPane.showMessageDialog(this, "Tolerancia actualizada correctamente.", "Listo", JOptionPane.INFORMATION_MESSAGE);
+        });
+        centro.add(panelTolerancia);
+
+        izquierda.add(centro, BorderLayout.CENTER);
+
+        // ---------- TABLA GENERAL (DERECHA) ----------
+        String[] cols = new String[DIAS_SEMANA.length + 1];
+        cols[0] = "Colaborador";
+        System.arraycopy(DIAS_SEMANA, 0, cols, 1, DIAS_SEMANA.length);
+        modeloHorarioGeneral = new DefaultTableModel(cols, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        JTable tabla = new JTable(modeloHorarioGeneral);
+        tabla.setRowHeight(30);
+        tabla.setFillsViewportHeight(true);
+        tabla.getTableHeader().setReorderingAllowed(false);
+        tabla.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        // Renderer de cabecera: fondo gris claro y letras negras (legible en Windows LAF)
+        final DefaultTableCellRenderer headerRender = new DefaultTableCellRenderer();
+        headerRender.setHorizontalAlignment(SwingConstants.CENTER);
+        headerRender.setOpaque(true);
+        headerRender.setForeground(Color.BLACK);
+        headerRender.setBackground(new Color(0xD5, 0xE8, 0xD9));
+        headerRender.setBorder(BorderFactory.createLineBorder(GRIS_BORDE));
+        for (int i = 0; i < tabla.getColumnCount(); i++) {
+            tabla.getColumnModel().getColumn(i).setHeaderRenderer(headerRender);
+        }
+
+        DefaultTableCellRenderer render = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable t, Object val, boolean sel,
+                    boolean foc, int row, int col) {
+                Component c = super.getTableCellRendererComponent(t, val, sel, foc, row, col);
+                String s = val == null ? "" : val.toString();
+                c.setForeground(Color.BLACK);
+                if (col == 0) {
+                    setHorizontalAlignment(LEFT);
+                    c.setBackground(Color.WHITE);
+                    c.setFont(c.getFont().deriveFont(Font.BOLD));
+                } else {
+                    setHorizontalAlignment(CENTER);
+                    if (s.equals("D")) c.setBackground(new Color(0xFF, 0xF3, 0xE0));
+                    else if (!s.isEmpty()) c.setBackground(new Color(0xE8, 0xF5, 0xE9));
+                    else c.setBackground(Color.WHITE);
+                    c.setFont(c.getFont().deriveFont(Font.PLAIN));
+                }
+                return c;
+            }
+        };
+        for (int i = 0; i < tabla.getColumnCount(); i++)
+            tabla.getColumnModel().getColumn(i).setCellRenderer(render);
+        tabla.getColumnModel().getColumn(0).setPreferredWidth(180);
+
+        JScrollPane spTabla = new JScrollPane(tabla);
+        spTabla.setBorder(new TitledBorder("Horario general de la semana"));
+
+        raiz.add(izquierda, BorderLayout.WEST);
+        raiz.add(spTabla, BorderLayout.CENTER);
+
+        cargarTablaHorarioGeneral();
+        return raiz;
+    }
+
+    private void guardarHorarioDia() {
+        Empleado emp = listaEmpHorario.getSelectedValue();
+        if (emp == null) {
+            JOptionPane.showMessageDialog(this, "Selecciona un empleado de la lista.", "Atención", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int dia = comboDiaHorario.getSelectedIndex() + 1;
+        boolean descanso = chkDescansoHorario.isSelected();
+        LocalTime entrada = null, salida = null;
+        if (!descanso) {
+            try {
+                entrada = LocalTime.parse(txtEntradaHorario.getText().trim(), FMT_HORA);
+                salida = LocalTime.parse(txtSalidaHorario.getText().trim(), FMT_HORA);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Formato de hora inválido. Use HH:mm (ej. 08:00).", "Atención", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (!salida.isAfter(entrada)) {
+                JOptionPane.showMessageDialog(this, "La hora de salida debe ser mayor que la de entrada.", "Atención", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+        rrhh.guardarHorarioSemanal(emp.getId(), dia, entrada, salida, descanso);
+        cargarTablaHorarioGeneral();
+    }
+
+    private void quitarHorarioDia() {
+        Empleado emp = listaEmpHorario.getSelectedValue();
+        if (emp == null) {
+            JOptionPane.showMessageDialog(this, "Selecciona un empleado de la lista.", "Atención", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int dia = comboDiaHorario.getSelectedIndex() + 1;
+        rrhh.eliminarHorarioDia(emp.getId(), dia);
+        cargarTablaHorarioGeneral();
+    }
+
+    private void cargarTablaHorarioGeneral() {
+        modeloHorarioGeneral.setRowCount(0);
+        List<Empleado> empleados = hotel.getListaEmpleados();
+        if (empleados == null) return;
+        Map<Integer, String[]> matriz = rrhh.obtenerMatrizHorarios();
+        for (Empleado e : empleados) {
+            Object[] fila = new Object[DIAS_SEMANA.length + 1];
+            fila[0] = e.getNombre() + " " + e.getApellido() + " (" + e.getRol() + ")";
+            String[] dias = matriz.get(e.getId());
+            for (int d = 1; d <= 7; d++) {
+                fila[d] = (dias == null || dias[d] == null) ? "" : dias[d];
+            }
+            modeloHorarioGeneral.addRow(fila);
         }
     }
 
