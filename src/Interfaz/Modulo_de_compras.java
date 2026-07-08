@@ -186,7 +186,7 @@ public class Modulo_de_compras extends JFrame {
         btnGen.setBounds(220, ry + gap * 7 + 14, 155, 30);
         JButton btnLimp = btn("Limpiar", C_AZUL);
         btnLimp.setBounds(392, ry + gap * 7 + 14, 110, 30);
-        JButton btnReg = btn("Regresar", C_ROJO);
+        JButton btnReg = btn("Regresar", Color.lightGray);
         btnReg.setBounds(518, ry + gap * 7 + 14, 110, 30);
         btnGen.addActionListener(e -> generarOrden());
         btnLimp.addActionListener(e -> limpiarOrden());
@@ -568,11 +568,11 @@ public class Modulo_de_compras extends JFrame {
         btnRow.setOpaque(false);
         JButton btnGenerar = btn("Generar Reporte", C_AZUL);
         JButton btnOrdenes = btn("+ Incluir Ordenes", C_TEAL);
-        JButton btnExportTXT = btn("Descargar reporte (.txt)", new Color(180, 30, 30));
+        JButton btnExportTXT = btn("Descargar reporte (.xlsx)", new Color(0, 120, 50));
         JButton btnLimpiarR = btn("Limpiar", C_ROJO);
         btnGenerar.addActionListener(e -> generarReporte(false));
         btnOrdenes.addActionListener(e -> generarReporte(true));
-        btnExportTXT.addActionListener(e -> exportarTXT());
+        btnExportTXT.addActionListener(e -> exportarExcel());
         btnLimpiarR.addActionListener(e -> txtReporte.setText(""));
         btnRow.add(btnLimpiarR);
         btnRow.add(btnOrdenes);
@@ -752,6 +752,13 @@ public class Modulo_de_compras extends JFrame {
         }
         actualizarTablaAprobacion();
         actualizarTablaOrdenes();
+        // FIX 1: escribir el motivo en la columna 6 de la fila correspondiente
+        for (int i = 0; i < modeloAprobacion.getRowCount(); i++) {
+            if (id.equals(modeloAprobacion.getValueAt(i, 0).toString())) {
+                modeloAprobacion.setValueAt(motivo, i, 6);
+                break;
+            }
+        }
     }
 
     private void actualizarTablaAprobacion() {
@@ -1280,56 +1287,253 @@ public class Modulo_de_compras extends JFrame {
     }
 
     // ════════════════════════════════════════════════════════════════
-    //  EXPORTAR TXT  (reemplaza al antiguo "Exportar PDF")
+    //  EXPORTAR EXCEL (.xlsx) sin librerias externas
+    //  Genera un XML SpreadsheetML valido que Excel y LibreOffice abren
     // ════════════════════════════════════════════════════════════════
-    private void exportarTXT() {
-        // Si el área está vacía, generar el reporte primero
-        if (txtReporte.getText().trim().isEmpty()) {
-            generarReporte(true);
-        }
-
+    private void exportarExcel() {
         JFileChooser fc = new JFileChooser();
-        fc.setDialogTitle("Guardar Reporte como TXT");
+        fc.setDialogTitle("Guardar Reporte como Excel");
         fc.setSelectedFile(new java.io.File("Reporte_TruGarden_"
-                + new java.text.SimpleDateFormat("yyyyMMdd_HHmm").format(new java.util.Date()) + ".txt"));
-        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Archivo de texto (*.txt)", "txt"));
+                + new java.text.SimpleDateFormat("yyyyMMdd_HHmm").format(new java.util.Date()) + ".xlsx"));
+        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "Libro Excel (*.xlsx)", "xlsx"));
 
         if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
             return;
         }
 
         java.io.File archivo = fc.getSelectedFile();
-        if (!archivo.getName().toLowerCase().endsWith(".txt")) {
-            archivo = new java.io.File(archivo.getAbsolutePath() + ".txt");
+        if (!archivo.getName().toLowerCase().endsWith(".xlsx")) {
+            archivo = new java.io.File(archivo.getAbsolutePath() + ".xlsx");
         }
 
-        try (java.io.PrintWriter pw = new java.io.PrintWriter(
-                new java.io.OutputStreamWriter(
-                        new java.io.FileOutputStream(archivo), "UTF-8"))) {
-            pw.print(txtReporte.getText());
+        try {
+            generarXlsx(archivo);
 
             int op = JOptionPane.showConfirmDialog(this,
                     "Reporte exportado correctamente.\n\nArchivo: " + archivo.getName()
-                    + "\nUbicación: " + archivo.getParent()
-                    + "\n\n¿Desea abrir el archivo ahora?",
-                    "Reporte exportado", JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE);
+                    + "\nUbicacion: " + archivo.getParent()
+                    + "\n\nDesea abrir el archivo ahora?",
+                    "Excel Exportado", JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE);
 
             if (op == JOptionPane.YES_OPTION) {
                 try {
                     java.awt.Desktop.getDesktop().open(archivo);
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(this,
-                            "No se pudo abrir automáticamente.\nAbra el archivo manualmente en:\n"
-                            + archivo.getAbsolutePath(),
+                            "No se pudo abrir automaticamente.\nUbicacion:\n" + archivo.getAbsolutePath(),
                             "Aviso", JOptionPane.INFORMATION_MESSAGE);
                 }
             }
-
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
-                    "Error al exportar el reporte:\n" + ex.getMessage(),
+                    "Error al exportar Excel:\n" + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    /**
+     * Genera un .xlsx real (ZIP con XML interno) sin librerias externas.
+     * Contiene 3 hojas: Cuentas por Pagar, Inventario, Ordenes de Compra.
+     */
+    private void generarXlsx(java.io.File destino) throws Exception {
+        java.text.SimpleDateFormat sdfH = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+        // ── Hoja 1: Cuentas por Pagar ────────────────────────────────
+        StringBuilder h1 = new StringBuilder();
+        h1.append(xmlSheetHeader());
+        // Titulo
+        h1.append("<row r=\"1\"><c r=\"A1\" s=\"1\" t=\"inlineStr\"><is><t>HOTEL TRUGARDEN - Cuentas por Pagar</t></is></c></row>\n");
+        h1.append("<row r=\"2\"><c r=\"A2\" t=\"inlineStr\"><is><t>Generado: " + sdfH.format(new java.util.Date()) + "</t></is></c></row>\n");
+        // Cabecera
+        String[] hCuentas = {"Nro. Factura", "Proveedor", "Monto (S/.)", "Tipo Pago", "F. Emision", "F. Vencim.", "Estado"};
+        h1.append(xmlHeaderRow(4, hCuentas));
+        // Datos
+        double totPend = 0, totPago = 0, totVenc = 0;
+        int cP = 0, cA = 0, cV = 0;
+        for (int i = 0; i < modeloCuentas.getRowCount(); i++) {
+            String est = modeloCuentas.getValueAt(i, 6).toString();
+            String mon = modeloCuentas.getValueAt(i, 2).toString();
+            h1.append(xmlDataRow(5 + i, new String[]{
+                modeloCuentas.getValueAt(i, 0).toString(),
+                modeloCuentas.getValueAt(i, 1).toString(),
+                mon,
+                modeloCuentas.getValueAt(i, 3).toString(),
+                modeloCuentas.getValueAt(i, 4).toString(),
+                modeloCuentas.getValueAt(i, 5).toString(),
+                est
+            }));
+            double m = 0;
+            try {
+                m = Double.parseDouble(mon.replace("S/ ", "").replace(",", ""));
+            } catch (Exception ig) {
+            }
+            switch (est) {
+                case "Pendiente":
+                    totPend += m;
+                    cP++;
+                    break;
+                case "Pagado":
+                    totPago += m;
+                    cA++;
+                    break;
+                case "Vencido":
+                    totVenc += m;
+                    cV++;
+                    break;
+            }
+        }
+        int baseR = 5 + modeloCuentas.getRowCount() + 1;
+        h1.append(xmlDataRow(baseR, new String[]{"Pendientes: " + cP, "", String.format("S/ %,.2f", totPend), "", "", "", ""}));
+        h1.append(xmlDataRow(baseR + 1, new String[]{"Pagadas: " + cA, "", String.format("S/ %,.2f", totPago), "", "", "", ""}));
+        h1.append(xmlDataRow(baseR + 2, new String[]{"Vencidas: " + cV, "", String.format("S/ %,.2f", totVenc), "", "", "", ""}));
+        h1.append(xmlDataRow(baseR + 3, new String[]{"DEUDA ACTIVA TOTAL", "", String.format("S/ %,.2f", totPend + totVenc), "", "", "", ""}));
+        h1.append(xmlSheetFooter());
+
+        // ── Hoja 2: Inventario ────────────────────────────────────────
+        StringBuilder h2 = new StringBuilder();
+        h2.append(xmlSheetHeader());
+        h2.append("<row r=\"1\"><c r=\"A1\" s=\"1\" t=\"inlineStr\"><is><t>HOTEL TRUGARDEN - Inventario / Stock</t></is></c></row>\n");
+        String[] hInv = {"Nombre", "Tipo / Categoria", "Stock Actual", "Stock Minimo", "Estado"};
+        h2.append(xmlHeaderRow(3, hInv));
+        List<Producto> inv = SistemaHotel.getInstancia().getHotel().getInventario();
+        int ri = 0;
+        if (inv != null) {
+            for (Producto pr : inv) {
+                h2.append(xmlDataRow(4 + ri, new String[]{
+                    pr.getNombre(), pr.getTipo(),
+                    String.valueOf(pr.getStock()), String.valueOf(pr.getStockMinimo()),
+                    pr.getEstadoVisual()
+                }));
+                ri++;
+            }
+        }
+        h2.append(xmlSheetFooter());
+
+        // ── Hoja 3: Ordenes de Compra ─────────────────────────────────
+        StringBuilder h3 = new StringBuilder();
+        h3.append(xmlSheetHeader());
+        h3.append("<row r=\"1\"><c r=\"A1\" s=\"1\" t=\"inlineStr\"><is><t>HOTEL TRUGARDEN - Ordenes de Compra</t></is></c></row>\n");
+        String[] hOrd = {"ID Orden", "Producto", "Cantidad", "Fecha Emision", "Proveedor", "Costo Total (S/.)", "Estado"};
+        h3.append(xmlHeaderRow(3, hOrd));
+        List<OrdenCompra> ords = SistemaHotel.getInstancia().getHotel().getListaOrdenes();
+        int ro = 0;
+        if (ords != null) {
+            for (OrdenCompra o : ords) {
+                h3.append(xmlDataRow(4 + ro, new String[]{
+                    o.getIdOrden(), o.getNombreProducto(),
+                    String.valueOf(o.getCantidad()),
+                    SDF.format(o.getFechaEmision()),
+                    o.getProveedor(),
+                    String.format("S/ %,.2f", o.getPrecioTotal()),
+                    o.getEstado()
+                }));
+                ro++;
+            }
+        }
+        h3.append(xmlSheetFooter());
+
+        // ── Armar el ZIP (.xlsx) ──────────────────────────────────────
+        String sharedStrings = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"0\" uniqueCount=\"0\"/>\n";
+
+        String styles = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+                + "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+                + "<fonts count=\"2\"><font><sz val=\"11\"/></font><font><b/><sz val=\"12\"/></font></fonts>\n"
+                + "<fills count=\"2\"><fill><patternFill patternType=\"none\"/></fill><fill><patternFill patternType=\"gray125\"/></fill></fills>\n"
+                + "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>\n"
+                + "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>\n"
+                + "<cellXfs count=\"2\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"
+                + "<xf numFmtId=\"0\" fontId=\"1\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/></cellXfs>\n"
+                + "</styleSheet>\n";
+
+        String workbook = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+                + "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+                + "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n"
+                + "<sheets>\n"
+                + "<sheet name=\"Cuentas por Pagar\" sheetId=\"1\" r:id=\"rId1\"/>\n"
+                + "<sheet name=\"Inventario\" sheetId=\"2\" r:id=\"rId2\"/>\n"
+                + "<sheet name=\"Ordenes de Compra\" sheetId=\"3\" r:id=\"rId3\"/>\n"
+                + "</sheets>\n</workbook>\n";
+
+        String wbRels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+                + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+                + "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>\n"
+                + "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet2.xml\"/>\n"
+                + "<Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet3.xml\"/>\n"
+                + "<Relationship Id=\"rId4\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings\" Target=\"sharedStrings.xml\"/>\n"
+                + "<Relationship Id=\"rId5\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>\n"
+                + "</Relationships>\n";
+
+        String pkgRels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+                + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+                + "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>\n"
+                + "</Relationships>\n";
+
+        String contentTypes = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+                + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n"
+                + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n"
+                + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>\n"
+                + "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\n"
+                + "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+                + "<Override PartName=\"/xl/worksheets/sheet2.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+                + "<Override PartName=\"/xl/worksheets/sheet3.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+                + "<Override PartName=\"/xl/sharedStrings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml\"/>\n"
+                + "<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>\n"
+                + "</Types>\n";
+
+        try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(
+                new java.io.FileOutputStream(destino))) {
+            zos.setLevel(java.util.zip.Deflater.BEST_COMPRESSION);
+            zipEntry(zos, "[Content_Types].xml", contentTypes);
+            zipEntry(zos, "_rels/.rels", pkgRels);
+            zipEntry(zos, "xl/workbook.xml", workbook);
+            zipEntry(zos, "xl/_rels/workbook.xml.rels", wbRels);
+            zipEntry(zos, "xl/sharedStrings.xml", sharedStrings);
+            zipEntry(zos, "xl/styles.xml", styles);
+            zipEntry(zos, "xl/worksheets/sheet1.xml", h1.toString());
+            zipEntry(zos, "xl/worksheets/sheet2.xml", h2.toString());
+            zipEntry(zos, "xl/worksheets/sheet3.xml", h3.toString());
+        }
+    }
+
+    private String xmlSheetHeader() {
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+                + "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+                + "<sheetData>\n";
+    }
+
+    private String xmlSheetFooter() {
+        return "</sheetData>\n</worksheet>\n";
+    }
+
+    private String xmlHeaderRow(int rowNum, String[] headers) {
+        StringBuilder sb = new StringBuilder("<row r=\"" + rowNum + "\">");
+        char col = 'A';
+        for (String h : headers) {
+            String xml = h.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+            sb.append("<c r=\"").append(col).append(rowNum).append("\" s=\"1\" t=\"inlineStr\"><is><t>").append(xml).append("</t></is></c>");
+            col++;
+        }
+        sb.append("</row>\n");
+        return sb.toString();
+    }
+
+    private String xmlDataRow(int rowNum, String[] vals) {
+        StringBuilder sb = new StringBuilder("<row r=\"" + rowNum + "\">");
+        char col = 'A';
+        for (String v : vals) {
+            String xml = (v == null ? "" : v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+            sb.append("<c r=\"").append(col).append(rowNum).append("\" t=\"inlineStr\"><is><t>").append(xml).append("</t></is></c>");
+            col++;
+        }
+        sb.append("</row>\n");
+        return sb.toString();
+    }
+
+    private void zipEntry(java.util.zip.ZipOutputStream zos, String nombre, String contenido) throws Exception {
+        zos.putNextEntry(new java.util.zip.ZipEntry(nombre));
+        zos.write(contenido.getBytes("UTF-8"));
+        zos.closeEntry();
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -1407,7 +1611,7 @@ public class Modulo_de_compras extends JFrame {
         t.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         t.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
         t.getTableHeader().setBackground(C_AZUL);
-        t.getTableHeader().setForeground(Color.WHITE);
+        t.getTableHeader().setForeground(Color.BLACK);
         t.setGridColor(new Color(200, 215, 230));
         t.setSelectionBackground(new Color(180, 210, 255));
         t.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);

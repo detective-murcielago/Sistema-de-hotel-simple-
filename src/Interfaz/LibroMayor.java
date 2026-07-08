@@ -346,7 +346,7 @@ public class LibroMayor extends javax.swing.JPanel {
         t.setForeground(NEGRO);
         t.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
         t.getTableHeader().setBackground(VERDE_HEADER);
-        t.getTableHeader().setForeground(BLANCO);
+        t.getTableHeader().setForeground(NEGRO);
         t.setGridColor(GRIS_BORDE);
         t.setSelectionBackground(new Color(213, 232, 212));
         t.setSelectionForeground(NEGRO);
