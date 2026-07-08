@@ -444,8 +444,28 @@ public class Hotel implements Serializable {
         if (buscarHuespedPorDocumento(pago.getNumDocumentoHuesped()) == null) {
             return false;
         }
+        // Regla de negocio: una estadía (ficha) no puede pagarse dos veces.
+        // Si la ficha asociada al pago ya tiene un pago registrado, se rechaza.
+        if (fichaYaPagada(pago.getIdFicha())) {
+            return false;
+        }
         getListaPagosServicio().add(pago);
         return true;
+    }
+
+    // ---------------------------------------------------------------------
+    //  F-010: Indica si una ficha de hospedaje ya tiene un pago registrado.
+    //  Evita cobrar dos veces la misma estadía.
+    // ---------------------------------------------------------------------
+    public boolean fichaYaPagada(String idFicha) {
+        if (idFicha == null || idFicha.trim().isEmpty()) return false;
+        for (Entidades.PagoServicio p : getListaPagosServicio()) {
+            if (p.getIdFicha() != null
+                    && p.getIdFicha().equalsIgnoreCase(idFicha.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---------------------------------------------------------------------

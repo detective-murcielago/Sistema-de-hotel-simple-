@@ -14,22 +14,7 @@ import java.util.List;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 
-/**
- * Construye los paneles (cards) de las historias de usuario del recepcionista.
- * Se mantiene la estética del módulo Recepcionista:
- *   - Fondo del contenedor:  naranja (255,102,0)
- *   - Botones de acción:     azul   (102,153,255)
- *   - Títulos:               Segoe UI Bold, blancos
- *
- * Cada método devuelve un JPanel listo para agregarse al jPanelContenedor
- * (que usa CardLayout) del JFrame Recepcionista.
- *
- * Historias implementadas:
- *   F-004  registrarPreferenciasPanel()
- *   F-005  historialEstadiasPanel()
- *   F-010  pagoServiciosPanel()
- *   F-011  historialCompletoPanel()
- */
+
 public class PanelesHU {
 
     // ---- Paleta / estilo compartido con el módulo Recepcionista ----
@@ -467,6 +452,31 @@ public class PanelesHU {
                 return;
             }
 
+            // Regla de negocio: evitar cobrar dos veces la misma estadía.
+            // Si la ficha activa del huésped ya tiene un pago, se bloquea.
+            String idFichaActual = fichaSel[0].getIdFicha();
+            PagoServicio pagoPrevio = null;
+            for (PagoServicio p : hotel().obtenerPagosHuesped(doc)) {
+                if (p.getIdFicha() != null
+                        && p.getIdFicha().equalsIgnoreCase(idFichaActual)) {
+                    pagoPrevio = p;
+                    break;
+                }
+            }
+            if (pagoPrevio != null) {
+                JOptionPane.showMessageDialog(panel,
+                        "ESTE HUÉSPED YA PAGÓ SU ESTADÍA.\n\n"
+                        + "La estadía " + idFichaActual + " ya cuenta con un pago registrado:\n"
+                        + "   Comprobante: " + pagoPrevio.getComprobante() + "\n"
+                        + "   Método: " + pagoPrevio.getMetodoPago() + "\n"
+                        + "   Monto: S/ " + String.format("%.2f", pagoPrevio.getMonto()) + "\n\n"
+                        + "No se puede registrar un segundo pago para la misma estadía.",
+                        "Pago ya registrado - Operación bloqueada",
+                        JOptionPane.ERROR_MESSAGE);
+                cargar.run();
+                return;
+            }
+
             String comprobante = "PS-" + (System.currentTimeMillis() % 1000000);
             PagoServicio pago = new PagoServicio(doc, servicio, metodo, monto,
                     comprobante, LocalDateTime.now());
@@ -486,8 +496,12 @@ public class PanelesHU {
                 fichaSel[0] = null;
                 cargar.run();
             } else {
-                JOptionPane.showMessageDialog(panel,
-                        "No se pudo registrar el pago. Verifique los datos.",
+                // Segunda barrera: si la lógica de negocio rechazó el pago,
+                // lo más probable es que la estadía ya estuviera pagada.
+                String msg = hotel().fichaYaPagada(fichaSel[0].getIdFicha())
+                        ? "Esta estadía ya fue pagada. No se permite un segundo pago."
+                        : "No se pudo registrar el pago. Verifique los datos.";
+                JOptionPane.showMessageDialog(panel, msg,
                         "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
